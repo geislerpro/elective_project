@@ -138,6 +138,8 @@ function startAgain() {
   document.getElementById("restartBtn").style.display = "none";
 
   classifyVideo();
+  
+  window.location.href = `myapp://mlresult?label=${label}`;
 }
 </script>
 
