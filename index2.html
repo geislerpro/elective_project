@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/p5.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/addons/p5.dom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/addons/p5.sound.min.js"></script>
+  <script src="https://unpkg.com/ml5@0.5.0/dist/ml5.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      display: block;
+    }
+    #restartBtn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<button id="restartBtn">Start Again</button>
+
+<script>
+let video;
+let label = "waiting...";
+let classifier;
+let modelURL = 'https://teachablemachine.withgoogle.com/models/S7oEAu4Kt/';
+
+// freeze logic
+let frozen = false;
+let frozenFrame;
+let windupStart = null;
+let countdown = 3;
+
+function preload() {
+  classifier = ml5.imageClassifier(modelURL + 'model.json');
+}
+
+function setup() {
+  createCanvas(640, 520);
+
+  video = createCapture(VIDEO);
+  video.hide();
+
+  classifyVideo();
+
+  // restart button
+  document.getElementById("restartBtn").onclick = startAgain;
+}
+
+function classifyVideo() {
+  if (!frozen) {
+    classifier.classify(video, gotResults);
+  }
+}
+
+function draw() {
+  background(0);
+
+  if (frozen && frozenFrame) {
+    // show frozen frame
+    image(frozenFrame, 0, 0, width, height);
+  } else if (!frozen) {
+    // show live video
+    image(video, 0, 0);
+  }
+
+  // show label
+  fill(255);
+  textSize(32);
+  textAlign(CENTER, CENTER);
+  text(label, width / 2, height - 16);
+
+  // pick emoji
+  let emoji = "🚂";
+  if (label == "Flammable") emoji = "🌈";
+  else if (label == "Non-Flammable") emoji = "🦄";
+  else if (label == "Fire_Starter") emoji = "🎸";
+
+  textSize(256);
+  text(emoji, width / 2, height / 2);
+
+  // Count down windup
+  if (windupStart !== null && !frozen) {
+    let elapsed = floor((millis() - windupStart) / 1000);
+    let remaining = 3 - elapsed;
+
+    if (remaining > 0) {
+      fill(255, 0, 0);
+      textSize(64);
+      text(remaining, width / 2, 60);
+    } else {
+      freezeVideo();
+    }
+  }
+}
+
+function gotResults(error, results) {
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  label = results[0].label;
+
+  // begin 3-second windup (do this whenever you want to trigger a freeze)
+  if (windupStart === null) {
+    windupStart = millis();
+  }
+
+  classifyVideo();
+}
+
+// freeze the video after the countdown
+function freezeVideo() {
+  frozen = true;
+  frozenFrame = video.get();
+  document.getElementById("restartBtn").style.display = "block";
+}
+
+// restart normal operation
+function startAgain() {
+  frozen = false;
+  frozenFrame = null;
+  windupStart = null;
+  countdown = 3;
+
+  document.getElementById("restartBtn").style.display = "none";
+
+  classifyVideo();
+}
+</script>
+
+</body>
+</html>
