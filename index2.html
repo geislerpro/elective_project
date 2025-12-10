@@ -42,6 +42,9 @@ let frozenFrame;
 let windupStart = null;
 let countdown = 3;
 
+// store results
+let resultCounts = {};  // {label: total confidence}
+
 function preload() {
   classifier = ml5.imageClassifier(modelURL + 'model.json');
 }
@@ -68,20 +71,16 @@ function draw() {
   background(0);
 
   if (frozen && frozenFrame) {
-    // show frozen frame
     image(frozenFrame, 0, 0, width, height);
   } else if (!frozen) {
-    // show live video
     image(video, 0, 0);
   }
 
-  // show label
   fill(255);
   textSize(32);
   textAlign(CENTER, CENTER);
   text(label, width / 2, height - 16);
 
-  // pick emoji
   let emoji = "🚂";
   if (label == "Flammable") emoji = "🌈";
   else if (label == "Non-Flammable") emoji = "🦄";
@@ -93,14 +92,14 @@ function draw() {
   // Count down windup
   if (windupStart !== null && !frozen) {
     let elapsed = floor((millis() - windupStart) / 1000);
-    let remaining = 3 - elapsed;
+    let remaining = countdown - elapsed;
 
     if (remaining > 0) {
       fill(255, 0, 0);
       textSize(64);
       text(remaining, width / 2, 60);
     } else {
-      freezeVideo();
+      freezeVideoWithHighestConfidence();
     }
   }
 }
@@ -113,7 +112,11 @@ function gotResults(error, results) {
 
   label = results[0].label;
 
-  // begin 3-second windup (do this whenever you want to trigger a freeze)
+  // accumulate confidence for each label
+  if (!resultCounts[label]) resultCounts[label] = 0;
+  resultCounts[label] += results[0].confidence;
+
+  // begin 3-second windup
   if (windupStart === null) {
     windupStart = millis();
   }
@@ -121,11 +124,25 @@ function gotResults(error, results) {
   classifyVideo();
 }
 
-// freeze the video after the countdown
-function freezeVideo() {
+// freeze the video and pick the class with highest confidence
+function freezeVideoWithHighestConfidence() {
   frozen = true;
   frozenFrame = video.get();
   document.getElementById("restartBtn").style.display = "block";
+
+  // pick the label with highest accumulated confidence
+  let maxLabel = label;
+  let maxConfidence = -1;
+  for (let key in resultCounts) {
+    if (resultCounts[key] > maxConfidence) {
+      maxConfidence = resultCounts[key];
+      maxLabel = key;
+    }
+  }
+  label = maxLabel;
+
+  // optionally send to app via custom URL scheme
+  window.location.href = `myapp://mlresult?label=${label}`;
 }
 
 // restart normal operation
@@ -134,12 +151,11 @@ function startAgain() {
   frozenFrame = null;
   windupStart = null;
   countdown = 3;
+  resultCounts = {};
 
   document.getElementById("restartBtn").style.display = "none";
 
   classifyVideo();
-  
-  window.location.href = `myapp://mlresult?label=${label}`;
 }
 </script>
 
